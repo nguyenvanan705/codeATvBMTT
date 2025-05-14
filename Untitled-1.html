@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DES Encrypt/Decrypt Tool</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <style>
+    body {
+      background: #eef3f8;
+      padding: 30px;
+    }
+    .container {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+    }
+    textarea {
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="text-center text-primary mb-4">🔐 DES Encrypt/Decrypt Tool</h2>
+
+    <!-- File Upload -->
+    <div class="mb-3">
+      <label for="fileInput" class="form-label">📁 Select File to Load Content</label>
+      <input type="file" class="form-control" id="fileInput" accept=".txt" onchange="loadFile(this)">
+    </div>
+
+    <!-- Input Text -->
+    <div class="mb-3">
+      <label for="inputText" class="form-label">📄 Input Text (for encryption or decryption)</label>
+      <textarea class="form-control" id="inputText" rows="4" placeholder="Text loaded from file or typed here..."></textarea>
+    </div>
+
+    <!-- Key -->
+    <div class="mb-3">
+      <label for="key" class="form-label">🔑 Key (any length)</label>
+      <input type="text" class="form-control" id="key" placeholder="Enter encryption key">
+    </div>
+
+    <!-- Buttons -->
+    <div class="d-flex gap-2 mb-3">
+      <button class="btn btn-success w-50" onclick="encrypt()">🔒 Encrypt</button>
+      <button class="btn btn-warning w-50" onclick="decrypt()">🔓 Decrypt</button>
+    </div>
+
+    <!-- Output -->
+    <div class="mb-3">
+      <label for="outputText" class="form-label">📝 Output (Base64 for encrypted or plain text after decrypt)</label>
+      <textarea class="form-control" id="outputText" rows="4" readonly></textarea>
+    </div>
+
+    <!-- Download Button -->
+    <button class="btn btn-primary w-100" onclick="downloadResult()">⬇️ Download Result</button>
+
+    <p class="text-center text-muted mt-4 small">Using DES (ECB Mode, Pkcs7 Padding). Key is derived using MD5 hash.</p>
+  </div>
+
+  <script>
+    function deriveKey(input) {
+      const md5 = CryptoJS.MD5(input);
+      return CryptoJS.enc.Hex.parse(md5.toString().substr(0, 16));
+    }
+
+    function encrypt() {
+      const text = document.getElementById("inputText").value;
+      const keyInput = document.getElementById("key").value;
+      if (!keyInput) return alert("Please enter a key.");
+      const key = deriveKey(keyInput);
+
+      const encrypted = CryptoJS.DES.encrypt(text, key, {
+        mode: CryptoJS.mode.ECB,
+        padding: CryptoJS.pad.Pkcs7
+      });
+
+      document.getElementById("outputText").value = encrypted.toString();
+    }
+
+    function decrypt() {
+      const text = document.getElementById("inputText").value;
+      const keyInput = document.getElementById("key").value;
+      if (!keyInput) return alert("Please enter a key.");
+      const key = deriveKey(keyInput);
+
+      try {
+        const decrypted = CryptoJS.DES.decrypt(text, key, {
+          mode: CryptoJS.mode.ECB,
+          padding: CryptoJS.pad.Pkcs7
+        });
+        document.getElementById("outputText").value = decrypted.toString(CryptoJS.enc.Utf8);
+      } catch {
+        alert("❌ Decryption failed. Wrong key or input.");
+      }
+    }
+
+    function loadFile(input) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        document.getElementById("inputText").value = e.target.result;
+      };
+      if (input.files[0]) {
+        reader.readAsText(input.files[0]);
+      }
+    }
+
+    function downloadResult() {
+      const text = document.getElementById("outputText").value;
+      if (!text) {
+        alert("❗ Nothing to download.");
+        return;
+      }
+
+      const blob = new Blob([text], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = "result.txt";
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
