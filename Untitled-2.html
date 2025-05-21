@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>AES File Encrypt/Decrypt</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+    }
+    input, select, button {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
+      padding: 10px;
+    }
+    #downloadLink {
+      display: none;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>AES File Encrypt/Decrypt</h2>
+
+  <select id="mode">
+    <option value="encrypt">🔐 Mã hóa</option>
+    <option value="decrypt">🔓 Giải mã</option>
+  </select>
+
+  <input type="file" id="fileInput" />
+  <input type="password" id="password" placeholder="Nhập mã khóa (tự do)" />
+  <button onclick="process()">Bắt đầu xử lý</button>
+
+  <a id="downloadLink">📥 Tải file kết quả</a>
+
+  <script>
+    const ivLength = 12; // 96-bit IV cho AES-GCM
+
+    async function getKeyFromPassword(password, salt) {
+      const enc = new TextEncoder();
+      const keyMaterial = await window.crypto.subtle.importKey(
+        "raw",
+        enc.encode(password),
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+      );
+
+      return await window.crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt,
+          iterations: 100000,
+          hash: "SHA-256",
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function process() {
+      const mode = document.getElementById("mode").value;
+      const file = document.getElementById("fileInput").files[0];
+      const password = document.getElementById("password").value;
+
+      if (!file || !password) return alert("Vui lòng chọn file và nhập mật khẩu.");
+
+      const arrayBuffer = await file.arrayBuffer();
+      const enc = new TextEncoder();
+      const salt = enc.encode("static_salt"); // có thể random nếu muốn
+
+      const key = await getKeyFromPassword(password, salt);
+
+      if (mode === "encrypt") {
+        const iv = window.crypto.getRandomValues(new Uint8Array(ivLength));
+        const encrypted = await window.crypto.subtle.encrypt(
+          { name: "AES-GCM", iv },
+          key,
+          arrayBuffer
+        );
+
+        // Gắn IV vào đầu file
+        const combined = new Uint8Array(ivLength + encrypted.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(encrypted), ivLength);
+
+        downloadBlob(combined, file.name + ".enc");
+
+      } else {
+        // Tách IV + dữ liệu mã hóa
+        const iv = new Uint8Array(arrayBuffer.slice(0, ivLength));
+        const encryptedData = arrayBuffer.slice(ivLength);
+
+        try {
+               const decrypted = await window.crypto.subtle.decrypt(
+               { name: "AES-GCM", iv },
+                key,
+                encryptedData
+  );
+
+  const fileName = file.name.replace(".enc", ".txt"); // đảm bảo là txt
+  const decodedText = new TextDecoder().decode(decrypted);
+  const blob = new Blob([decodedText], { type: "text/plain" });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.getElementById("downloadLink");
+  link.href = url;
+  link.download = fileName;
+  link.style.display = "block";
+  link.textContent = "📥 Tải file: " + fileName;
+
+} catch (err) {
+  console.error("Chi tiết lỗi giải mã:", err);
+  alert("❌ Giải mã thất bại. Có thể sai khóa hoặc file không hợp lệ.");
+}
+
+
+      }
+    }
+
+    function downloadBlob(data, filename) {
+      const blob = new Blob([data]);
+      const url = URL.createObjectURL(blob);
+      const link = document.getElementById("downloadLink");
+      link.href = url;
+      link.download = filename;
+      link.style.display = "block";
+      link.textContent = "📥 Tải file: " + filename;
+    }
+  </script>
+</body>
+</html>
