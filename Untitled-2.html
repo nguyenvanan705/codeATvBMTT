@@ -20,6 +20,12 @@
       display: none;
       margin-top: 20px;
     }
+    #imagePreview {
+      display: none;
+      max-width: 100%;
+      margin-top: 20px;
+      border: 1px solid #ccc;
+    }
   </style>
 </head>
 <body>
@@ -35,9 +41,10 @@
   <button onclick="process()">Bắt đầu xử lý</button>
 
   <a id="downloadLink">📥 Tải file kết quả</a>
+  <img id="imagePreview" />
 
   <script>
-    const ivLength = 12; // 96-bit IV cho AES-GCM
+    const ivLength = 12;
 
     async function getKeyFromPassword(password, salt) {
       const enc = new TextEncoder();
@@ -48,7 +55,6 @@
         false,
         ["deriveKey"]
       );
-
       return await window.crypto.subtle.deriveKey(
         {
           name: "PBKDF2",
@@ -72,7 +78,7 @@
 
       const arrayBuffer = await file.arrayBuffer();
       const enc = new TextEncoder();
-      const salt = enc.encode("static_salt"); // có thể random nếu muốn
+      const salt = enc.encode("static_salt"); // bạn có thể random nếu cần
 
       const key = await getKeyFromPassword(password, salt);
 
@@ -84,42 +90,47 @@
           arrayBuffer
         );
 
-        // Gắn IV vào đầu file
         const combined = new Uint8Array(ivLength + encrypted.byteLength);
         combined.set(iv, 0);
         combined.set(new Uint8Array(encrypted), ivLength);
 
         downloadBlob(combined, file.name + ".enc");
+        document.getElementById("imagePreview").style.display = "none";
 
       } else {
-        // Tách IV + dữ liệu mã hóa
         const iv = new Uint8Array(arrayBuffer.slice(0, ivLength));
         const encryptedData = arrayBuffer.slice(ivLength);
 
         try {
-               const decrypted = await window.crypto.subtle.decrypt(
-               { name: "AES-GCM", iv },
-                key,
-                encryptedData
-  );
+          const decrypted = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv },
+            key,
+            encryptedData
+          );
 
-  const fileName = file.name.replace(".enc", ".txt"); // đảm bảo là txt
-  const decodedText = new TextDecoder().decode(decrypted);
-  const blob = new Blob([decodedText], { type: "text/plain" });
+          const blob = new Blob([decrypted]);
+          const fileType = await getFileType(blob);
+          const fileName = file.name.replace(".enc", "");
 
-  const url = URL.createObjectURL(blob);
-  const link = document.getElementById("downloadLink");
-  link.href = url;
-  link.download = fileName;
-  link.style.display = "block";
-  link.textContent = "📥 Tải file: " + fileName;
+          const url = URL.createObjectURL(blob);
+          const link = document.getElementById("downloadLink");
+          link.href = url;
+          link.download = fileName;
+          link.style.display = "block";
+          link.textContent = "📥 Tải file: " + fileName;
 
-} catch (err) {
-  console.error("Chi tiết lỗi giải mã:", err);
-  alert("❌ Giải mã thất bại. Có thể sai khóa hoặc file không hợp lệ.");
-}
+          const img = document.getElementById("imagePreview");
+          if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(fileType)) {
+            img.src = url;
+            img.style.display = "block";
+          } else {
+            img.style.display = "none";
+          }
 
-
+        } catch (err) {
+          console.error("Chi tiết lỗi giải mã:", err);
+          alert("❌ Giải mã thất bại. Có thể sai khóa hoặc file không hợp lệ.");
+        }
       }
     }
 
@@ -131,6 +142,17 @@
       link.download = filename;
       link.style.display = "block";
       link.textContent = "📥 Tải file: " + filename;
+    }
+
+    async function getFileType(blob) {
+      const buffer = await blob.slice(0, 12).arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+
+      if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8) return "image/jpeg";
+      if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/gif";
+      if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/webp";
+      return "application/octet-stream";
     }
   </script>
 </body>
