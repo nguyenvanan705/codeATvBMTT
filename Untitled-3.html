@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Transfer with Integrity Check</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .form-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        #fileInput {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #uploadStatus {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 5px;
+            display: none;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        .hash {
+            font-family: monospace;
+            font-size: 0.85em;
+            word-break: break-all;
+        }
+        .action-btn {
+            padding: 6px 12px;
+            margin-right: 5px;
+            border-radius: 3px;
+            text-decoration: none;
+            color: white;
+        }
+        .download-btn { background: #17a2b8; }
+        .view-btn { background: #6c757d; }
+        .verify-btn { background: #fd7e14; }
+        .preview-btn { background: #6f42c1; }
+        .success { background: #d4edda; color: #155724; display: block; }
+        .error { background: #f8d7da; color: #721c24; display: block; }
+        .loading { background: #fff3cd; color: #856404; display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>File Transfer with SHA-256 Integrity Check</h1>
+        
+        <div class="upload-section">
+            <h2>Upload File</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <input type="file" id="fileInput" required>
+                    <button type="submit" id="uploadBtn">Upload</button>
+                </div>
+                <div id="uploadStatus"></div>
+            </form>
+        </div>
+        
+        <div class="file-list">
+            <h2>Available Files</h2>
+            <table id="filesTable">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Size (bytes)</th>
+                        <th>SHA-256 Hash</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <!-- Files will be listed here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadForm = document.getElementById('uploadForm');
+            const fileInput = document.getElementById('fileInput');
+            const uploadStatus = document.getElementById('uploadStatus');
+            const filesTableBody = document.getElementById('filesTableBody');
+            
+            // Kết nối SocketIO với reconnection
+            const socket = io({
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
+            
+            // Xử lý upload
+            uploadForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const file = fileInput.files[0];
+                if (!file) return;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                uploadStatus.textContent = 'Uploading...';
+                uploadStatus.className = 'loading';
+                uploadStatus.style.display = 'block';
+                
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Upload failed');
+                    }
+                    
+                    uploadStatus.innerHTML = `
+                        File <strong>${data.filename}</strong> uploaded!<br>
+                        SHA-256: <span class="hash">${data.hash}</span>
+                    `;
+                    uploadStatus.className = 'success';
+                    fileInput.value = '';
+                } catch (error) {
+                    uploadStatus.textContent = 'Error: ' + error.message;
+                    uploadStatus.className = 'error';
+                }
+            });
+            
+            // Hiển thị danh sách file
+            function displayFiles(files) {
+                filesTableBody.innerHTML = '';
+                
+                if (files.length === 0) {
+                    filesTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="4" style="text-align: center;">No files available</td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                files.forEach(file => {
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td>${file.filename}</td>
+                        <td>${file.size.toLocaleString()}</td>
+                        <td class="hash" title="${file.hash}">${file.hash.substring(0, 20)}...</td>
+                        <td>
+                            ${file.is_text ? 
+                                `<a href="/download/${file.filename}" class="action-btn view-btn">View</a>` : 
+                                `<a href="/download/${file.filename}" class="action-btn download-btn">Download</a>`
+                            }
+                            <button class="action-btn verify-btn" 
+                                    data-filename="${file.filename}" 
+                                    data-hash="${file.hash}">
+                                Verify
+                            </button>
+                            ${file.is_text ? 
+                                `<button class="action-btn preview-btn" 
+                                        data-filename="${file.filename}">
+                                    Preview
+                                </button>` : ''
+                            }
+                        </td>
+                    `;
+                    
+                    filesTableBody.appendChild(row);
+                });
+                
+                // Thêm sự kiện cho các nút
+                document.querySelectorAll('.verify-btn').forEach(btn => {
+                    btn.addEventListener('click', verifyFile);
+                });
+                
+                document.querySelectorAll('.preview-btn').forEach(btn => {
+                    btn.addEventListener('click', previewTextFile);
+                });
+            }
+            
+            // Kiểm tra tính toàn vẹn
+            async function verifyFile() {
+                const filename = this.getAttribute('data-filename');
+                const hash = this.getAttribute('data-hash');
+                const button = this;
+                
+                button.disabled = true;
+                button.textContent = 'Verifying...';
+                
+                try {
+                    const response = await fetch('/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            filename: filename,
+                            hash: hash
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Verification failed');
+                    }
+                    
+                    alert(`File ${filename} is ${data.verified ? 'VALID' : 'INVALID'}`);
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                } finally {
+                    button.textContent = 'Verify';
+                    button.disabled = false;
+                }
+            }
+            
+            // Xem trước file text
+            async function previewTextFile() {
+                const filename = this.getAttribute('data-filename');
+                
+                try {
+                    const response = await fetch(`/view/${filename}`);
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Preview failed');
+                    }
+                    
+                    const previewWindow = window.open('', '_blank');
+                    previewWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>Preview: ${data.filename}</title>
+                            <style>
+                                body { font-family: Arial; padding: 20px; white-space: pre-wrap; }
+                            </style>
+                        </head>
+                        <body>
+                            <h2>${data.filename}</h2>
+                            <p>SHA-256: ${data.hash}</p>
+                            <hr>
+                            <div>${data.content}</div>
+                        </body>
+                        </html>
+                    `);
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            }
+            
+            // SocketIO events
+            socket.on('connect', () => {
+                console.log('Connected to server');
+            });
+            
+            socket.on('file_list', (files) => {
+                displayFiles(files);
+            });
+            
+            socket.on('file_added', () => {
+                socket.emit('get_file_list');
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+            });
+        });
+    </script>
+</body>
+</html>
