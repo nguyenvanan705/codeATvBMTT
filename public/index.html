@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>EncryptChat</title>
+    <meta
+      name="description"
+      content="A minimalist, open-source, end-to-end RSA-2048 encrypted chat application."
+    />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        font-family: 'Roboto', sans-serif;
+        background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
+        display: flex;
+        justify-content: center;
+        padding: 20px;
+      }
+      #vue-instance {
+        max-width: 1200px;
+        width: 100%;
+        height: 100vh; 
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .container {
+        display: flex;
+        flex-wrap: wrap;
+        flex: 1; 
+        height: 100%;
+      }
+      .left-column,
+      .right-column {
+        flex: 1;
+        min-width: 300px;
+        padding: 20px;
+      }
+      .right-column {
+        background: #f9fafb;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        height: 100%; 
+      }
+      .info-container {
+        padding: 0;
+      }
+      h1 {
+        font-size: 1.8rem;
+        color: #1e3a8a;
+        margin-bottom: 15px;
+        text-align: center;
+        font-weight: 700;
+      }
+      .room-select {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      input[type="text"] {
+        padding: 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.3s;
+      }
+      input[type="text"]:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+      .yellow-button {
+        padding: 12px;
+        background: #f59e0b;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+      .yellow-button:hover {
+        background: #d97706;
+      }
+      .keys {
+        margin: 20px 0;
+        text-align: center;
+      }
+      .keys.encrypted-message {
+        text-align: left;
+      }
+      .green {
+        color: #10b981;
+      }
+      .yellow {
+        color: #f59e0b;
+      }
+      .divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 20px 0;
+      }
+      .keypair-loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .loader {
+        border: 4px solid #f3f4f6;
+        border-top: 4px solid #3b82f6;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      .chat-container {
+        flex: 1; 
+        overflow-y: auto;
+        max-height: none; 
+      }
+      .notification {
+        background: #e0f2fe;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+      }
+      .notification-timestamp {
+        color: #6b7280;
+        font-size: 0.8rem;
+      }
+      .notification-message {
+        color: #1e40af;
+      }
+      .message-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .message {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .msg_cotainer,
+      .msg_cotainer_send {
+        max-width: 70%;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 5px;
+      }
+      .msg_cotainer {
+        background: #e5e7eb;
+        align-self: flex-start;
+      }
+      .msg_cotainer_send {
+        background: #3b82f6;
+        color: #fff;
+        align-self: flex-end;
+      }
+      .title_msg {
+        font-size: 0.9rem;
+        color: #6b7280;
+        margin-bottom: 5px;
+      }
+      .content_msg h2 {
+        font-size: 1rem;
+        font-weight: 400;
+      }
+      .bottom-bar {
+        padding: 15px 0;
+        background: #f9fafb;
+      }
+      .message-input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.3s;
+      }
+      .message-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+      @media (max-width: 600px) {
+        #vue-instance {
+          border-radius: 0;
+        }
+        .container {
+          flex-direction: column;
+        }
+        .left-column,
+        .right-column {
+          min-width: 100%;
+          height: auto; 
+        }
+        h1 {
+          font-size: 1.5rem;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="vue-instance">
+      <div class="container">
+        <div class="left-column">
+          <div class="info-container full-width">
+            <h1>VÀO PHÒNG CHAT</h1>
+            <div class="room-select">
+              <input
+                type="text"
+                class="full-width"
+                placeholder="Room Name"
+                id="room-input"
+                v-model="pendingRoom"
+                @keyup.enter="joinRoom()"
+              />
+              <input
+                class="yellow-button full-width"
+                type="submit"
+                v-on:click="joinRoom()"
+                value="VÀO"
+              />
+            </div>
+
+            <div class="keys full-width">
+              <h1>KHÓA CÔNG KHAI CỦA BẠN</h1>
+              <div class="keys" v-if="originPublicKey">
+                <h2 style="display: inline-block;">Nickname của bạn:</h2>
+                <h3 class="green" style="display: inline-block;">
+                  {{ getKeySnippet(originPublicKey) }}
+.                </h3>
+                <p class="green">{{ originPublicKey }}</p>
+              </div>
+
+              <div class="divider"></div>
+
+              <h1>KHÓA CÔNG KHAI CỦA KHÁCH</h1>
+              <div class="keys" v-if="destinationPublicKey">
+                <h2 style="display: inline-block;">Nickname của khách:</h2>
+                <h3 class="yellow" style="display: inline-block;">
+                  {{ getKeySnippet(destinationPublicKey) }}
+                </h3>
+                <p class="yellow">{{ destinationPublicKey }}</p>
+              </div>
+              <h3 v-else>Chờ đợi người thứ 2 vào phòng ...</h3>
+              <div class="keypair-loader full-width" v-else>
+                <div class="center-x loader"></div>
+                <h2 class="center-text">Khởi tạo khóa...</h2>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="keys encrypted-message">
+              <h1>TIN ĐÃ MÃ HÓA</h1>
+              <div v-if="secret">{{ secret }}</div>
+              <h3 v-else>Hiển thị nội dung tin nhắn đã được mã hóa</h3>
+            </div>
+          </div>
+        </div>
+
+        <div class="right-column">
+          <div class="chat-container full-width" ref="chatContainer">
+            <h1>EncryptChat</h1>
+            <div class="notification full-width" v-for="notification in notifications">
+              <div class="notification-timestamp">{{ notification.timestamp }}</div>
+              <div class="notification-message">{{ notification.message }}</div>
+            </div>
+            <div class="message-list">
+              <div class="message" v-for="(message, id) in messages">
+                <div
+                  v-bind:class="
+                    message.sender == originPublicKey ? 'msg_cotainer_send' : 'msg_cotainer'
+                  "
+                >
+                  <div
+                    v-if="
+                      id < 1 || getKeySnippet(messages[id - 1].sender) != getKeySnippet(message.sender)
+                    "
+                    class="title_msg"
+                  >
+                    {{ getKeySnippet(message.sender) }}
+                  </div>
+                  <div class="content_msg">
+                    <h2>{{ message.text }}</h2>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bottom-bar">
+            <input
+              class="message-input"
+              type="text"
+              placeholder="Message"
+              v-model="draft"
+              @keyup.enter="sendMessage()"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.4.1/vue.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.3/socket.io.slim.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/immutable/3.8.1/immutable.min.js"></script>
+    <script src="/page.js"></script>
+  </body>
+</html>
